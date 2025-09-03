@@ -1,32 +1,47 @@
-"""
-## Astronaut ETL example DAG
-
-This DAG queries the list of astronauts currently in space from the
-Open Notify API and prints each astronaut's name and flying craft.
-
-There are two tasks, one to get the data from the API and save the results,
-and another to print the results. Both tasks are written in Python using
-Airflow's TaskFlow API, which allows you to easily turn Python functions into
-Airflow tasks, and automatically infer dependencies and pass data.
-
-The second task uses dynamic task mapping to create a copy of the task for
-each Astronaut in the list retrieved from the API. This list will change
-depending on how many Astronauts are in space, and the DAG will adjust
-accordingly each time it runs.
-
-For more explanation and getting started instructions, see our Write your
-first DAG tutorial: https://www.astronomer.io/docs/learn/get-started-with-airflow
-
-![Picture of the ISS](https://www.esa.int/var/esa/storage/images/esa_multimedia/images/2010/02/space_station_over_earth/10293696-3-eng-GB/Space_Station_over_Earth_card_full.jpg)
-"""
-
 from airflow.sdk.definitions.asset import Asset
+from airflow import DAG
+from airflow.providers.http.operators.http import HttpOperator
 from airflow.decorators import dag, task
 from pendulum import datetime
+from datetime import datetime, timedelta
 import requests
 
 
-# Define the basic parameters of the DAG, like schedule and start_date
+
+default_args = {
+    'owner': 'M Costa y J Lorenzo',
+    'start_date': datetime.today() - timedelta(days=1),
+    'retries': 1,
+    'retry_delay': timedelta(minutes=2),
+    'email_on_failure': False,
+    'depends_on_past': False,
+}
+
+
+def snapshot_meta():
+    a
+
+with DAG(
+    dag_id='recolectar_datos_vuelos',
+    description='DAG ETL que recolecta datos de los vuelos',
+    default_args=default_args,
+    schedule=None, #ACA SEGURO TENEMOS QUE POENR CAD CUANTO
+    catchup=False,
+    #tags=['pokemon', 'parallel', 'etl']
+) as dag:
+    snapshot_meta
+
+
+    # Nuevo DAG resultante
+    fetch_pokemon_list >> [download_a, download_b] >> merge_transform >> export_logs >> enviar_correo_manual
+
+
+
+
+
+
+
+
 @dag(
     start_date=datetime(2024, 1, 1),
     schedule="@daily",
@@ -36,18 +51,11 @@ import requests
     tags=["example"],
 )
 def example_astronauts():
-    # Define tasks
     @task(
-        # Define a dataset outlet for the task. This can be used to schedule downstream DAGs when this task has run.
         outlets=[Asset("current_astronauts")]
-    )  # Define that this task updates the `current_astronauts` Dataset
+    )  
     def get_astronauts(**context) -> list[dict]:
-        """
-        This task uses the requests library to retrieve a list of Astronauts
-        currently in space. The results are pushed to XCom with a specific key
-        so they can be used in a downstream pipeline. The task returns a list
-        of Astronauts to be used in the next task.
-        """
+
         try:
             r = requests.get("http://api.open-notify.org/astros.json")
             r.raise_for_status()
