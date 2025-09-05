@@ -288,7 +288,7 @@ def bue_flights_v3():
                         "is_extreme": bool(is_extreme),
 
                         #Calendario
-                        "dow": depart_dt.day_name(),    #dia de la semanda de la salida
+                        "dow": depart_dt.format("dddd"),     #dia de la semanda de la salida
                         "month": month,
                         "season": season,
                         "days_to_departure": (depart_dt.date() - snap_local.date()).days, #dias faltantes desde el snapshot hasta la fecha de salida.
@@ -298,7 +298,7 @@ def bue_flights_v3():
         ensure_dir(f"{DATA_DIR}/processed/flights_min_daily")
 
         safe_snap = meta["snapshot_id"].replace(":", "-")
-        out_parquet = f"{DATA_DIR}/processed/flights_min_daily/flights_min_daily_{safe_snap}.parquet"
+        #out_parquet = f"{DATA_DIR}/processed/flights_min_daily/flights_min_daily_{safe_snap}.parquet"
         out_csv     = f"{DATA_DIR}/processed/flights_min_daily/flights_min_daily_{safe_snap}.csv"
 
         try:
