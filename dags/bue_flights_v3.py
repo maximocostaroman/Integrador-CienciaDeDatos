@@ -21,7 +21,7 @@ ORIGIN        = os.getenv("ORIGIN", "BUE")
 CURRENCY      = os.getenv("CURRENCY", "usd")
 ONE_WAY       = os.getenv("ONE_WAY", "true")      # "true"/"false"
 MONTHS_AHEAD  = int(os.getenv("MONTHS_AHEAD", "12"))
-MAX_DESTS     = int(os.getenv("MAX_DESTS", "10")) # demo-friendly; 0 = sin tope
+MAX_DESTS     = int(os.getenv("MAX_DESTS", "200")) # demo-friendly; 0 = sin tope
 DATA_DIR      = os.getenv("DATA_DIR", "/usr/local/airflow/include/data")
 TZ_AR         = pendulum.timezone("America/Argentina/Mendoza")
 
