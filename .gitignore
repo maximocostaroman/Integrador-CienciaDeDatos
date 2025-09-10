@@ -9,3 +9,15 @@ airflow-webserver.pid
 webserver_config.py
 airflow.cfg
 airflow.db
+
+# Ignorar todo el contenido de include/data
+include/data/*
+
+# 👉 Pero permitir la carpeta processed
+!include/data/processed/
+
+# Dentro de processed, permitir también todo su contenido
+!include/data/processed/**
+
+# Ignorar crudos de raw siempre
+include/data/raw/
