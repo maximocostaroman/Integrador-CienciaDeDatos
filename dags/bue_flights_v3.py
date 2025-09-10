@@ -36,14 +36,14 @@ def http_get(url: str, params: dict, max_retries: int = 5) -> dict:
     for _ in range(max_retries): #Bucle de reintentos hasta q alcance max_retries
         r = requests.get(url, params=params, timeout=30)
         if r.status_code in (429, 500, 502, 503, 504):
-            time.sleep(wait)
+            time.sleep(wait) 
             wait = min(wait * 2, 30)
             continue
         r.raise_for_status()
         return r.json()
     raise RuntimeError(f"GET falló tras {max_retries} reintentos: {url}")
 
-#Calculas los meses desde una fecha 
+#Calculas los meses desde fecha actual hasta 12 meses adelante
 def months_from_now(n: int, anchor: pendulum.DateTime) -> list[str]:
     """['YYYY-MM', ...] desde el mes de anchor hasta +n."""
     y, m = anchor.year, anchor.month
@@ -55,6 +55,7 @@ def months_from_now(n: int, anchor: pendulum.DateTime) -> list[str]:
         out.append(f"{y2:04d}-{m2:02d}")
     return out
 
+#Clasifica el mometno del dia en el que se corre el snapshot
 def horariodeldia(dt_local: pendulum.DateTime) -> str:
     h = dt_local.hour
     if   6 <= h < 12: return "morning"
@@ -66,7 +67,7 @@ def horariodeldia(dt_local: pendulum.DateTime) -> str:
 def existecarpeta(path: str):
     os.makedirs(path, exist_ok=True)
 
-# Comprime y borra los json viejos
+# Recorre snapshots RAW y comprime o borra los json segun antiguedad
 def compress_old_jsons(base_raw_dir: str, compress_after_days: int, delete_after_days: int) -> dict:
     now = pendulum.now("UTC")
     changed, deleted = 0, 0
