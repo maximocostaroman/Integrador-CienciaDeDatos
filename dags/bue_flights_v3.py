@@ -13,32 +13,27 @@ default_args = {
     'owner': 'M Costa y J Lorenzo',
 }
 
-# ----------------------------
 # Configuración (variables de entorno con defaults)
-# ----------------------------
-TP_TOKEN      = os.getenv("TP_TOKEN", "")         # <- Debe venir en .env
+TP_TOKEN      = os.getenv("TP_TOKEN", "")         #Este viene del .env
 ORIGIN        = os.getenv("ORIGIN", "BUE")
 CURRENCY      = os.getenv("CURRENCY", "usd")
-ONE_WAY       = os.getenv("ONE_WAY", "true")      # "true"/"false"
+ONE_WAY       = os.getenv("ONE_WAY", "true")      #Solo ida
 MONTHS_AHEAD  = int(os.getenv("MONTHS_AHEAD", "12"))
-MAX_DESTS     = int(os.getenv("MAX_DESTS", "200")) # demo-friendly; 0 = sin tope
-DATA_DIR      = os.getenv("DATA_DIR", "/usr/local/airflow/include/data")
-TZ_AR         = pendulum.timezone("America/Argentina/Mendoza")
+MAX_DESTS     = int(os.getenv("MAX_DESTS", "200")) 
+DATA_DIR      = os.getenv("DATA_DIR", "/usr/local/airflow/include/data") #Aca se guardan los resultados
+TZ_AR         = pendulum.timezone("America/Argentina/Mendoza") #Zona horaria de Argentina
 
-# Retención (opcional)
+# Retención que limpia los json viejos
 ENABLE_CLEANUP          = os.getenv("ENABLE_CLEANUP", "false").lower() == "true"
 CLEANUP_COMPRESS_DAYS   = int(os.getenv("CLEANUP_COMPRESS_DAYS", "7"))
 CLEANUP_DELETE_DAYS     = int(os.getenv("CLEANUP_DELETE_DAYS", "30"))
 
 BASE_V3 = "https://api.travelpayouts.com/aviasales/v3"
 
-# ----------------------------
-# Helpers
-# ----------------------------
+#La peticion HTTP GET con 5 retries
 def http_get(url: str, params: dict, max_retries: int = 5) -> dict:
-    """GET con backoff para rate limit/5xx."""
     wait = 1.0
-    for _ in range(max_retries):
+    for _ in range(max_retries): #Bucle de reintentos hasta q alcance max_retries
         r = requests.get(url, params=params, timeout=30)
         if r.status_code in (429, 500, 502, 503, 504):
             time.sleep(wait)
@@ -48,6 +43,7 @@ def http_get(url: str, params: dict, max_retries: int = 5) -> dict:
         return r.json()
     raise RuntimeError(f"GET falló tras {max_retries} reintentos: {url}")
 
+#Calculas los meses desde una fecha 
 def months_from_now(n: int, anchor: pendulum.DateTime) -> list[str]:
     """['YYYY-MM', ...] desde el mes de anchor hasta +n."""
     y, m = anchor.year, anchor.month
@@ -59,21 +55,22 @@ def months_from_now(n: int, anchor: pendulum.DateTime) -> list[str]:
         out.append(f"{y2:04d}-{m2:02d}")
     return out
 
-def tod_label_from_local(dt_local: pendulum.DateTime) -> str:
+def horariodeldia(dt_local: pendulum.DateTime) -> str:
     h = dt_local.hour
     if   6 <= h < 12: return "morning"
     elif 12 <= h < 19: return "afternoon"
     elif 19 <= h <= 23: return "evening"
     return "night"
 
-def ensure_dir(path: str):
+#Crea las carpetas si no existen
+def existecarpeta(path: str):
     os.makedirs(path, exist_ok=True)
 
+# Comprime y borra los json viejos
 def compress_old_jsons(base_raw_dir: str, compress_after_days: int, delete_after_days: int) -> dict:
-    """Comprime .json >N días a .json.gz y borra snapshots >M días."""
     now = pendulum.now("UTC")
     changed, deleted = 0, 0
-    if not os.path.isdir(base_raw_dir):
+    if not os.path.isdir(base_raw_dir): 
         return {"compressed": changed, "deleted": deleted}
     for snap in os.listdir(base_raw_dir):
         snap_path = os.path.join(base_raw_dir, snap)
@@ -97,63 +94,62 @@ def compress_old_jsons(base_raw_dir: str, compress_after_days: int, delete_after
                         changed += 1
     return {"compressed": changed, "deleted": deleted}
 
-# ----------------------------
 # DAG
-# ----------------------------
 @dag(
     dag_id="bue_flights_v3",
-    schedule=None,  # Demo: trigger manual. Luego podés usar "0 8,20 * * *"
-    start_date=pendulum.datetime(2025, 9, 1, tz=TZ_AR),
+    schedule=None,  
+    start_date=pendulum.datetime(2025, 9, 1, tz=TZ_AR), #A partir del 1/9/2025
     catchup=False,
     default_args={"retries": 2, "retry_delay": timedelta(minutes=2)},
     tags=["bue","travelpayouts","v3","calendar"]
 )
-def bue_flights_v3():
 
+def bue_flights_v3():
     @task
     def snapshot_meta() -> dict:
-        """Crea carpeta del snapshot y guarda metadatos: hora local, tod_label, etc."""
+        """Crea carpeta del snapshot y guarda: hora local, tod_label, etc."""
         if not TP_TOKEN:
-            raise ValueError("Falta TP_TOKEN (.env)")
+            raise ValueError("Falta El token del .env")
 
         now_utc   = pendulum.now("UTC")
-        now_local = now_utc.in_timezone(TZ_AR)
-        snapshot_id = now_utc.to_iso8601_string()
+        now_local = now_utc.in_timezone(TZ_AR) #Convierte a la zona horaria de Mendoza
+        snapshot_id = now_utc.to_iso8601_string() #Crea el ID de la corrida, o sea el que van a tener las carpetas como nombre
 
-        meta = {
+        meta = { #La metadata del snapshot
             "snapshot_id": snapshot_id,
             "snapshot_utc": now_utc.to_iso8601_string(),
             "snapshot_local": now_local.to_iso8601_string(),
-            "tod_label": tod_label_from_local(now_local),
+            "tod_label": horariodeldia(now_local),
             "weekday_search": now_local.format("dddd"),
             "origin": ORIGIN,
             "currency": CURRENCY,
             "one_way": ONE_WAY,
         }
-        base = f"{DATA_DIR}/raw/{snapshot_id}"
-        ensure_dir(base + "/discover")
-        ensure_dir(base + "/calendar")
+        #Arma las carpetas con el nombre
+        base = f"{DATA_DIR}/raw/{snapshot_id}" 
+        existecarpeta(base + "/discover") 
+        existecarpeta(base + "/calendar")
         with open(f"{base}/snapshot_meta.json", "w", encoding="utf-8") as f:
             json.dump(meta, f, ensure_ascii=False, indent=2)
         return meta
 
     @task
     def discover_routes(meta: dict) -> list[str]:
-        """Trae TODOS los destinos (paginado) desde BUE para el mes actual."""
+        """Trae TODOS los destinos desde BUE para el mes actual."""
         snapshot_local = pendulum.parse(meta["snapshot_local"])
-        beginning = snapshot_local.start_of("month").to_date_string()  # YYYY-MM-DD
+        beginning = snapshot_local.start_of("month").to_date_string()  # AAAA-MM-DD
 
         url = f"{BASE_V3}/get_latest_prices"
         page = 1
-        by_dest_min = {}  # destino -> mejor precio visto
-        total_rows = 0
+        by_dest_min = {}  # va guardando el precio mínimo encontrado por destino
+        total_rows = 0 #contador
 
         while True:
             params = {
-                "origin": ORIGIN,
-                "group_by": "directions",
-                "period_type": "month",
-                "beginning_of_period": beginning,
+                "origin": ORIGIN, #EZE Y AEP
+                "group_by": "directions", #Por ruta
+                "period_type": "month", #Por mes
+                "beginning_of_period": beginning, #Desde el primer dia del mes actual
                 "one_way": ONE_WAY,
                 "currency": CURRENCY,
                 "page": page,
@@ -216,7 +212,7 @@ def bue_flights_v3():
             time.sleep(0.05)  # amable con rate limit
 
         out_dir = f"{DATA_DIR}/raw/{meta['snapshot_id']}/calendar"
-        ensure_dir(out_dir)
+        existecarpeta(out_dir)
         out_file = f"{out_dir}/{dest}.json"
         with open(out_file, "w", encoding="utf-8") as f:
             json.dump({"destination": dest, "months": months_blob}, f, ensure_ascii=False)  # 1 JSON por destino con todos los meses.
@@ -295,7 +291,7 @@ def bue_flights_v3():
                     })
 
         df = pd.DataFrame(rows)
-        ensure_dir(f"{DATA_DIR}/processed/flights_min_daily")
+        existecarpeta(f"{DATA_DIR}/processed/flights_min_daily")
 
         safe_snap = meta["snapshot_id"].replace(":", "-")
         #out_parquet = f"{DATA_DIR}/processed/flights_min_daily/flights_min_daily_{safe_snap}.parquet"
