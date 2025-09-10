@@ -317,7 +317,7 @@ def bue_flights_v3():
         res["skipped"] = False
         return res
 
-    # ---------- Orquestación ----------
+    # Flujo en el que se ejecutan
     meta   = snapshot_meta()
     dests  = discover_routes(meta)
     months = build_months(meta)
