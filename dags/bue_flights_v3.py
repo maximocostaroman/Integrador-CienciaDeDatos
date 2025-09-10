@@ -151,29 +151,31 @@ def bue_flights_v3():
                 "group_by": "directions", #Por ruta
                 "period_type": "month", #Por mes
                 "beginning_of_period": beginning, #Desde el primer dia del mes actual
-                "one_way": ONE_WAY,
-                "currency": CURRENCY,
-                "page": page,
-                "token": TP_TOKEN,
+                "one_way": ONE_WAY, #Ida
+                "currency": CURRENCY, #Dolares
+                "page": page, #Paginacion
+                "token": TP_TOKEN, #El token el env
             }
-            js = http_get(url, params)
+            js = http_get(url, params) #El http del principio
             rows = js.get("data", []) or []
             if not rows:
                 break
             total_rows += len(rows)
 
-            for r in rows:
-                dest = r.get("destination")
+            for r in rows: #Por cada ruta
+                dest = r.get("destination") 
                 if not dest:
                     continue
-                val = r.get("value")
+                val = r.get("value") #El precio mas bajo
                 if dest not in by_dest_min or (isinstance(val, (int,float)) and val < by_dest_min[dest]):
-                    by_dest_min[dest] = float(val) if isinstance(val, (int,float)) else math.inf
+                    by_dest_min[dest] = float(val) if isinstance(val, (int,float)) else math.inf #Guarda el precio mas bajo x destino
 
             page += 1
             # pequeña pausa amable (opcional)
             time.sleep(0.02)
 
+    
+        #Se ordenan segun el precio minimo y se queda solo con la lista de cod de destino
         dests_sorted = [d for d,_ in sorted(by_dest_min.items(), key=lambda kv: kv[1])]
         if MAX_DESTS > 0:
             dests_sorted = dests_sorted[:MAX_DESTS]
@@ -184,6 +186,7 @@ def bue_flights_v3():
         return dests_sorted
 
     @task
+    #Arma los meses
     def build_months(meta: dict) -> list[str]:
         """Mes actual local + 12 siguientes, en formato YYYY-MM."""
         snap_local = pendulum.parse(meta["snapshot_local"])
@@ -193,7 +196,7 @@ def bue_flights_v3():
     def fetch_calendar_for_dest(dest: str, months: list[str], meta: dict) -> str:
         """
         Pide /grouped_prices para TODOS los meses de un destino y guarda
-        UN solo JSON compacto por destino (reduce cantidad de archivos).
+        UN solo JSON compacto por destino.
         """
         url = f"{BASE_V3}/grouped_prices"
         months_blob = {} 
@@ -202,15 +205,15 @@ def bue_flights_v3():
             params = {
                 "origin": ORIGIN,
                 "destination": dest,
-                "departure_at": mm,           # YYYY-MM
+                "departure_at": mm,           # AAAA-MM
                 "group_by": "departure_at",
                 "one_way": ONE_WAY,
                 "currency": CURRENCY,
                 "token": TP_TOKEN,
             }
-            js = http_get(url, params)         # GET con backoff
+            js = http_get(url, params)         # GET 
             months_blob[mm] = js 
-            time.sleep(0.05)  # amable con rate limit
+            time.sleep(0.05)  
 
         out_dir = f"{DATA_DIR}/raw/{meta['snapshot_id']}/calendar"
         existecarpeta(out_dir)
