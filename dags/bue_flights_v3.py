@@ -120,8 +120,8 @@ def bue_flights_v3():
             "snapshot_id": snapshot_id,
             "snapshot_utc": now_utc.to_iso8601_string(),
             "snapshot_local": now_local.to_iso8601_string(),
-            "tod_label": horariodeldia(now_local),
-            "weekday_search": now_local.format("dddd"),
+            "tod_label": horariodeldia(now_local), #Momento del dia en que se corre
+            "weekday_search": now_local.format("dddd"), #Dia de la semana de la corrida
             "origin": ORIGIN,
             "currency": CURRENCY,
             "one_way": ONE_WAY,
@@ -130,13 +130,14 @@ def bue_flights_v3():
         base = f"{DATA_DIR}/raw/{snapshot_id}" 
         existecarpeta(base + "/discover") 
         existecarpeta(base + "/calendar")
+        #Guarda la metadata en un json
         with open(f"{base}/snapshot_meta.json", "w", encoding="utf-8") as f:
             json.dump(meta, f, ensure_ascii=False, indent=2)
         return meta
 
     @task
     def discover_routes(meta: dict) -> list[str]:
-        """Trae TODOS los destinos desde BUE para el mes actual."""
+        """Trae TODOS los destinos desde BUE"""
         snapshot_local = pendulum.parse(meta["snapshot_local"])
         beginning = snapshot_local.start_of("month").to_date_string()  # AAAA-MM-DD
 
@@ -171,7 +172,6 @@ def bue_flights_v3():
                     by_dest_min[dest] = float(val) if isinstance(val, (int,float)) else math.inf #Guarda el precio mas bajo x destino
 
             page += 1
-            # pequeña pausa amable (opcional)
             time.sleep(0.02)
 
     
@@ -186,7 +186,6 @@ def bue_flights_v3():
         return dests_sorted
 
     @task
-    #Arma los meses
     def build_months(meta: dict) -> list[str]:
         """Mes actual local + 12 siguientes, en formato YYYY-MM."""
         snap_local = pendulum.parse(meta["snapshot_local"])
@@ -195,8 +194,8 @@ def bue_flights_v3():
     @task
     def fetch_calendar_for_dest(dest: str, months: list[str], meta: dict) -> str:
         """
-        Pide /grouped_prices para TODOS los meses de un destino y guarda
-        UN solo JSON compacto por destino.
+        Llama al endopoint /grouped_prices para TODOS los meses de un destino y guarda
+        UN solo JSON por destino.
         """
         url = f"{BASE_V3}/grouped_prices"
         months_blob = {} 
@@ -205,7 +204,7 @@ def bue_flights_v3():
             params = {
                 "origin": ORIGIN,
                 "destination": dest,
-                "departure_at": mm,           # AAAA-MM
+                "departure_at": mm,           
                 "group_by": "departure_at",
                 "one_way": ONE_WAY,
                 "currency": CURRENCY,
@@ -224,7 +223,7 @@ def bue_flights_v3():
 
     @task
     def normalize_and_save(meta: dict, dest_files: list[str]) -> str:
-        """Convierte los JSON compactos a una tabla plana y la guarda (Parquet/CSV)."""
+        """Convierte los JSON de destinos a una tabla plana y la guarda"""
         rows = []   # diccionario con una fila por (destino, dia de salida)
         snap_local = pendulum.parse(meta["snapshot_local"])
 
@@ -242,15 +241,14 @@ def bue_flights_v3():
                 data = (payload or {}).get("data", {})
                 if not isinstance(data, dict):
                     continue
-                # data: {"YYYY-MM-DD": { price, transfers, duration, departure_at, origin_airport, destination_airport, ...}}
                 
-                # parsea la fecha de la clave a depart_dt (objeto pendulum).
                 for day, rec in data.items():
                     try:
                         depart_dt = pendulum.parse(day)
                     except Exception:
                         continue
-
+                    
+                    #Extraer los campos de interés y calcular los derivados
                     price     = rec.get("price")
                     duration  = rec.get("duration") # en minutos
                     transfers = rec.get("transfers")
